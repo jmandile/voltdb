@@ -135,9 +135,9 @@ fi
 # check envvars which might override default args
 if [ -n "${VOLTDB_HEAPSIZE:+x}" ]; then
   #echo "run with heapsize $VOLTDB_HEAPSIZE"
-  JAVA_HEAP_MAX="-Xmx""$VOLTDB_HEAPSIZE""m"
+  JAVA_HEAP_MAX="-Xmx""$VOLTDB_HEAPSIZE""m -Xms""$VOLTDB_HEAPSIZE""m"
 else
-  JAVA_HEAP_MAX="-Xmx1024m"
+  JAVA_HEAP_MAX="-Xmx1024m -Xms1024m"
 fi
 #echo $JAVA_HEAP_MAX
 
