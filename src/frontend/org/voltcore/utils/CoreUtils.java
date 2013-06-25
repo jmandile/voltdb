@@ -200,7 +200,7 @@ public class CoreUtils {
      */
     public static ThreadPoolExecutor getBoundedThreadPoolExecutor(int maxPoolSize, long keepAliveTime, TimeUnit unit, ThreadFactory tFactory) {
         return new ThreadPoolExecutor(0, maxPoolSize, keepAliveTime, unit,
-                                      new LinkedBlockingQueue<Runnable>(), tFactory);
+                                      new LinkedBlockingQueue<Runnable>(64), tFactory);
     }
 
     public static ThreadFactory getThreadFactory(String name) {
