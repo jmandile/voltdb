@@ -62,9 +62,8 @@ public class StreamSnapshotAckReceiver implements Runnable {
                 rejoinLog.trace("Blocking on receiving mailbox");
                 VoltMessage msg = m_mb.recvBlocking(10 * 60 * 1000); // Wait for 10 minutes
                 if (msg == null) {
-                    rejoinLog.warn("No stream snapshot ack message was received in the past 10 minutes" +
-                                   " or the thread was interrupted");
-                    continue;
+                    rejoinLog.warn("No stream snapshot ack message was received in the past 10 minutes");
+                    break;
                 }
 
                 assert (msg instanceof RejoinDataAckMessage);
