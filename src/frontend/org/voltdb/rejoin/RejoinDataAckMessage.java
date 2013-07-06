@@ -43,6 +43,7 @@ public class RejoinDataAckMessage extends VoltMessage {
      * Create an end-of-stream message to terminate the ack thread
      */
     public RejoinDataAckMessage(boolean isEOS) {
+        m_subject = Subject.DEFAULT.getId();
         m_isEOS = isEOS;
     }
 
