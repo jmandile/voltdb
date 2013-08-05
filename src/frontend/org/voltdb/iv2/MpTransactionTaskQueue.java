@@ -95,6 +95,12 @@ public class MpTransactionTaskQueue extends TransactionTaskQueue
         }
     }
 
+    private void taskQueueOffer(TransactionTask task)
+    {
+        Iv2Trace.logSiteTaskerQueueOffer(task);
+        m_taskQueue.offer(task);
+    }
+
     private boolean taskQueueOffer()
     {
         boolean retval = false;
@@ -102,8 +108,7 @@ public class MpTransactionTaskQueue extends TransactionTaskQueue
             if (!m_backlog.isEmpty()) {
                 TransactionTask task = m_backlog.getFirst();
                 m_currentTask = task;
-                Iv2Trace.logSiteTaskerQueueOffer(task);
-                m_taskQueue.offer(task);
+                taskQueueOffer(task);
                 retval = true;
             }
         }
@@ -135,8 +140,7 @@ public class MpTransactionTaskQueue extends TransactionTaskQueue
      */
     synchronized void restart()
     {
-        m_currentTask = null;
-        taskQueueOffer();
+        taskQueueOffer(m_currentTask);
     }
 
     /**
