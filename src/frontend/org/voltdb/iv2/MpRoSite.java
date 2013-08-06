@@ -486,13 +486,7 @@ public class MpRoSite implements Runnable, SiteProcedureConnection, FragmentPlan
 
     @Override
     public long getFragmentIdForPlanHash(byte[] planHash) {
-        Sha1Wrapper key = new Sha1Wrapper(planHash);
-        FragInfo frag = null;
-        synchronized (FragInfo.class) {
-            frag = m_plansByHash.get(key);
-        }
-        assert(frag != null);
-        return frag.fragId;
+        throw new RuntimeException("RO MP Site doesn't do this, shouldn't be here.");
     }
 
     @Override
