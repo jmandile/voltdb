@@ -52,8 +52,6 @@ import org.voltdb.exceptions.EEException;
 import org.voltdb.jni.ExecutionEngine;
 import org.voltdb.jni.Sha1Wrapper;
 
-import com.google.common.collect.ImmutableMap;
-
 public class MpRoSite implements Runnable, SiteProcedureConnection, FragmentPlanSource
 {
     //private static final VoltLogger hostLog = new VoltLogger("HOST");
@@ -148,12 +146,6 @@ public class MpRoSite implements Runnable, SiteProcedureConnection, FragmentPlan
         }
 
         @Override
-        public ImmutableMap<String, ProcedureRunner> getProcedures() {
-            throw new RuntimeException("Not implemented in iv2");
-            // return m_loadedProcedures.procs;
-        }
-
-        @Override
         public long getSiteId() {
             return m_siteId;
         }
@@ -194,11 +186,6 @@ public class MpRoSite implements Runnable, SiteProcedureConnection, FragmentPlan
         @Override
         public int getCatalogVersion() {
             return m_context.catalogVersion;
-        }
-
-        @Override
-        public SiteTracker getSiteTracker() {
-            throw new RuntimeException("Not implemented in iv2");
         }
 
         @Override

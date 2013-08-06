@@ -22,8 +22,6 @@ import org.voltdb.catalog.Cluster;
 import org.voltdb.catalog.Database;
 import org.voltdb.dtxn.SiteTracker;
 
-import com.google.common.collect.ImmutableMap;
-
 public interface SystemProcedureExecutionContext {
     public Database getDatabase();
 
@@ -34,8 +32,6 @@ public interface SystemProcedureExecutionContext {
     public long getCurrentTxnId();
 
     public long getNextUndo();
-
-    public ImmutableMap<String, ProcedureRunner> getProcedures();
 
     public long getSiteId();
 
@@ -49,8 +45,6 @@ public interface SystemProcedureExecutionContext {
     public long getCatalogCRC();
 
     public int getCatalogVersion();
-
-    public SiteTracker getSiteTracker();
 
     // Separate SiteTracker accessor for IV2 use.
     // Snapshot services that need this can get a SiteTracker in IV2, but

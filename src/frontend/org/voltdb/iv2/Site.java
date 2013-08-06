@@ -82,8 +82,6 @@ import org.voltdb.utils.LogKeys;
 
 import vanilla.java.affinity.impl.PosixJNAAffinity;
 
-import com.google.common.collect.ImmutableMap;
-
 public class Site implements Runnable, SiteProcedureConnection, SiteSnapshotConnection, FragmentPlanSource
 {
     private static final VoltLogger hostLog = new VoltLogger("HOST");
@@ -226,12 +224,6 @@ public class Site implements Runnable, SiteProcedureConnection, SiteSnapshotConn
         }
 
         @Override
-        public ImmutableMap<String, ProcedureRunner> getProcedures() {
-            throw new RuntimeException("Not implemented in iv2");
-            // return m_loadedProcedures.procs;
-        }
-
-        @Override
         public long getSiteId() {
             return m_siteId;
         }
@@ -272,11 +264,6 @@ public class Site implements Runnable, SiteProcedureConnection, SiteSnapshotConn
         @Override
         public int getCatalogVersion() {
             return m_context.catalogVersion;
-        }
-
-        @Override
-        public SiteTracker getSiteTracker() {
-            throw new RuntimeException("Not implemented in iv2");
         }
 
         @Override
@@ -332,7 +319,6 @@ public class Site implements Runnable, SiteProcedureConnection, SiteSnapshotConn
             BackendTarget backend,
             CatalogContext context,
             String serializedCatalog,
-            long txnId,
             int partitionId,
             int numPartitions,
             StartAction startAction,
