@@ -18,7 +18,6 @@
 package org.voltdb.iv2;
 
 import java.io.IOException;
-import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -57,7 +56,6 @@ import org.voltdb.TheHashinator;
 import org.voltdb.VoltDB;
 import org.voltdb.VoltProcedure.VoltAbortException;
 import org.voltdb.VoltTable;
-import org.voltdb.catalog.CatalogMap;
 import org.voltdb.catalog.Cluster;
 import org.voltdb.catalog.Database;
 import org.voltdb.catalog.Table;
@@ -65,10 +63,8 @@ import org.voltdb.dtxn.SiteTracker;
 import org.voltdb.dtxn.TransactionState;
 import org.voltdb.exceptions.EEException;
 import org.voltdb.jni.ExecutionEngine;
-import org.voltdb.jni.ExecutionEngine.TaskType;
 import org.voltdb.jni.ExecutionEngineIPC;
 import org.voltdb.jni.ExecutionEngineJNI;
-import org.voltdb.jni.MockExecutionEngine;
 import org.voltdb.jni.Sha1Wrapper;
 import org.voltdb.messaging.CompleteTransactionMessage;
 import org.voltdb.messaging.FragmentTaskMessage;
@@ -121,8 +117,7 @@ public class MpRoSite implements Runnable, SiteProcedureConnection, FragmentPlan
      */
     final InitiatorMailbox m_initiatorMailbox;
 
-    // Almighty execution engine and its HSQL sidekick
-    ExecutionEngine m_ee;
+    // Still need m_hsql here.
     HsqlBackend m_hsql;
 
     // Stats
@@ -387,18 +382,12 @@ public class MpRoSite implements Runnable, SiteProcedureConnection, FragmentPlan
     /** Thread specific initialization */
     void initialize(String serializedCatalog, long timestamp)
     {
-        if (m_backend == BackendTarget.NONE) {
-            m_hsql = null;
-            m_ee = new MockExecutionEngine(this);
-        }
-        else if (m_backend == BackendTarget.HSQLDB_BACKEND) {
+        if (m_backend == BackendTarget.HSQLDB_BACKEND) {
             m_hsql = HsqlBackend.initializeHSQLBackend(m_siteId,
                                                        m_context);
-            m_ee = new MockExecutionEngine(this);
         }
         else {
             m_hsql = null;
-            m_ee = initializeEE(serializedCatalog, timestamp);
         }
 
         m_snapshotter = new SnapshotSiteProcessor(m_scheduler,
@@ -614,22 +603,15 @@ public class MpRoSite implements Runnable, SiteProcedureConnection, FragmentPlan
 
     void shutdown()
     {
-        try {
-            if (m_hsql != null) {
-                HsqlBackend.shutdownInstance();
+        if (m_hsql != null) {
+            HsqlBackend.shutdownInstance();
+        }
+        if (m_snapshotter != null) {
+            try {
+                m_snapshotter.shutdown();
+            } catch (InterruptedException e) {
+                hostLog.warn("Interrupted during shutdown", e);
             }
-            if (m_ee != null) {
-                m_ee.release();
-            }
-            if (m_snapshotter != null) {
-                try {
-                    m_snapshotter.shutdown();
-                } catch (InterruptedException e) {
-                    hostLog.warn("Interrupted during shutdown", e);
-                }
-            }
-        } catch (InterruptedException e) {
-            hostLog.warn("Interrupted shutdown execution site.", e);
         }
     }
 
@@ -677,15 +659,13 @@ public class MpRoSite implements Runnable, SiteProcedureConnection, FragmentPlan
     @Override
     public byte[] loadTable(long spHandle, int tableId, VoltTable data, boolean returnUniqueViolations)
     {
-        return m_ee.loadTable(tableId, data,
-                spHandle,
-                m_lastCommittedSpHandle, returnUniqueViolations);
+        throw new RuntimeException("RO MP Site doesn't do this, shouldn't be here.");
     }
 
     @Override
     public void updateBackendLogLevels()
     {
-        m_ee.setLogLevels(org.voltdb.jni.EELoggers.getLogLevels());
+        throw new RuntimeException("RO MP Site doesn't do this, shouldn't be here.");
     }
 
     @Override
@@ -704,29 +684,13 @@ public class MpRoSite implements Runnable, SiteProcedureConnection, FragmentPlan
     @Override
     public void truncateUndoLog(boolean rollback, long beginUndoToken, long txnId, long spHandle)
     {
-        if (rollback) {
-            m_ee.undoUndoToken(beginUndoToken);
-        }
-        else {
-            assert(latestUndoToken != MpRoSite.kInvalidUndoToken);
-            assert(latestUndoToken >= beginUndoToken);
-            if (latestUndoToken > beginUndoToken) {
-                m_ee.releaseUndoToken(latestUndoToken);
-            }
-            m_lastCommittedTxnId = txnId;
-            if (TxnEgo.getPartitionId(m_lastCommittedSpHandle) != TxnEgo.getPartitionId(spHandle)) {
-                VoltDB.crashLocalVoltDB("Mismatch SpHandle partitiond id " +
-                        TxnEgo.getPartitionId(m_lastCommittedSpHandle) + ", " +
-                        TxnEgo.getPartitionId(spHandle), true, null);
-            }
-            m_lastCommittedSpHandle = spHandle;
-        }
+        throw new RuntimeException("RO MP Site doesn't do this, shouldn't be here.");
     }
 
     @Override
     public void stashWorkUnitDependencies(Map<Integer, List<VoltTable>> dependencies)
     {
-        m_ee.stashWorkUnitDependencies(dependencies);
+        throw new RuntimeException("RO MP Site doesn't do this, shouldn't be here.");
     }
 
     @Override
@@ -748,109 +712,25 @@ public class MpRoSite implements Runnable, SiteProcedureConnection, FragmentPlan
     @Override
     public long[] getUSOForExportTable(String signature)
     {
-        return m_ee.getUSOForExportTable(signature);
+        throw new RuntimeException("RO MP Site doesn't do this, shouldn't be here.");
     }
 
     @Override
     public void toggleProfiler(int toggle)
     {
-        m_ee.toggleProfiler(toggle);
+        throw new RuntimeException("RO MP Site doesn't do this, shouldn't be here.");
     }
 
     @Override
     public void tick()
     {
-        long time = System.currentTimeMillis();
-
-        m_ee.tick(time, m_lastCommittedSpHandle);
-        statsTick(time);
-    }
-
-    /**
-     * Cache the current statistics.
-     *
-     * @param time
-     */
-    private void statsTick(long time)
-    {
-        /*
-         * grab the table statistics from ee and put it into the statistics
-         * agent.
-         */
-        if (m_tableStats != null) {
-            CatalogMap<Table> tables = m_context.database.getTables();
-            int[] tableIds = new int[tables.size()];
-            int i = 0;
-            for (Table table : tables) {
-                tableIds[i++] = table.getRelativeIndex();
-            }
-
-            // data to aggregate
-            long tupleCount = 0;
-            int tupleDataMem = 0;
-            int tupleAllocatedMem = 0;
-            int indexMem = 0;
-            int stringMem = 0;
-
-            // update table stats
-            final VoltTable[] s1 =
-                m_ee.getStats(StatsSelector.TABLE, tableIds, false, time);
-            if ((s1 != null) && (s1.length > 0)) {
-                VoltTable stats = s1[0];
-                assert(stats != null);
-
-                // rollup the table memory stats for this site
-                while (stats.advanceRow()) {
-                    //Assert column index matches name for ENG-4092
-                    assert(stats.getColumnName(7).equals("TUPLE_COUNT"));
-                    tupleCount += stats.getLong(7);
-                    assert(stats.getColumnName(8).equals("TUPLE_ALLOCATED_MEMORY"));
-                    tupleAllocatedMem += (int) stats.getLong(8);
-                    assert(stats.getColumnName(9).equals("TUPLE_DATA_MEMORY"));
-                    tupleDataMem += (int) stats.getLong(9);
-                    assert(stats.getColumnName(10).equals("STRING_DATA_MEMORY"));
-                    stringMem += (int) stats.getLong(10);
-                }
-                stats.resetRowPosition();
-
-                m_tableStats.setStatsTable(stats);
-            }
-
-            // update index stats
-            final VoltTable[] s2 =
-                m_ee.getStats(StatsSelector.INDEX, tableIds, false, time);
-            if ((s2 != null) && (s2.length > 0)) {
-                VoltTable stats = s2[0];
-                assert(stats != null);
-
-                // rollup the index memory stats for this site
-                while (stats.advanceRow()) {
-                    //Assert column index matches name for ENG-4092
-                    assert(stats.getColumnName(11).equals("MEMORY_ESTIMATE"));
-                    indexMem += stats.getLong(11);
-                }
-                stats.resetRowPosition();
-
-                m_indexStats.setStatsTable(stats);
-            }
-
-            // update the rolled up memory statistics
-            if (m_memStats != null) {
-                m_memStats.eeUpdateMemStats(m_siteId,
-                                            tupleCount,
-                                            tupleDataMem,
-                                            tupleAllocatedMem,
-                                            indexMem,
-                                            stringMem,
-                                            m_ee.getThreadLocalPoolAllocations());
-            }
-        }
+        throw new RuntimeException("RO MP Site doesn't do this, shouldn't be here.");
     }
 
     @Override
     public void quiesce()
     {
-        m_ee.quiesce(m_lastCommittedSpHandle);
+        throw new RuntimeException("RO MP Site doesn't do this, shouldn't be here.");
     }
 
     @Override
@@ -859,21 +739,20 @@ public class MpRoSite implements Runnable, SiteProcedureConnection, FragmentPlan
                              Long sequenceNumber,
                              Integer partitionId, String tableSignature)
     {
-        m_ee.exportAction(syncAction, ackOffset, sequenceNumber,
-                          partitionId, tableSignature);
+        throw new RuntimeException("RO MP Site doesn't do this, shouldn't be here.");
     }
 
     @Override
     public VoltTable[] getStats(StatsSelector selector, int[] locators,
                                 boolean interval, Long now)
     {
-        return m_ee.getStats(selector, locators, interval, now);
+        throw new RuntimeException("RO MP Site doesn't do this, shouldn't be here.");
     }
 
     @Override
     public Future<?> doSnapshotWork()
     {
-        return m_snapshotter.doSnapshotWork(m_sysprocContext, m_ee);
+        throw new RuntimeException("RO MP Site doesn't do this, shouldn't be here.");
     }
 
     @Override
@@ -932,16 +811,9 @@ public class MpRoSite implements Runnable, SiteProcedureConnection, FragmentPlan
     public VoltTable[] executePlanFragments(int numFragmentIds,
             long[] planFragmentIds, long[] inputDepIds,
             Object[] parameterSets, long spHandle, long uniqueId, boolean readOnly)
-            throws EEException {
-        return m_ee.executePlanFragments(
-                numFragmentIds,
-                planFragmentIds,
-                inputDepIds,
-                parameterSets,
-                spHandle,
-                m_lastCommittedSpHandle,
-                uniqueId,
-                readOnly ? Long.MAX_VALUE : getNextUndoToken());
+            throws EEException
+    {
+        throw new RuntimeException("RO MP Site doesn't do this, shouldn't be here.");
     }
 
     @Override
@@ -952,38 +824,12 @@ public class MpRoSite implements Runnable, SiteProcedureConnection, FragmentPlan
     /**
      * Update the catalog.  If we're the MPI, don't bother with the EE.
      */
+    // IZZY-MP-RO: PLAN ON GETTING RID OF THIS
     public boolean updateCatalog(String diffCmds, CatalogContext context, CatalogSpecificPlanner csp,
             boolean requiresSnapshotIsolationboolean, boolean isMPI)
     {
         m_context = context;
         m_loadedProcedures.loadProcedures(m_context, m_backend, csp);
-
-        if (isMPI) {
-            // the rest of the work applies to sites with real EEs
-            return true;
-        }
-
-        // if a snapshot is in process, wait for it to finish
-        // don't bother if this isn't a schema change
-        //
-        if (requiresSnapshotIsolationboolean && m_snapshotter.isEESnapshotting()) {
-            hostLog.info(String.format("Site %d performing schema change operation must block until snapshot is locally complete.",
-                    CoreUtils.getSiteIdFromHSId(m_siteId)));
-            try {
-                m_snapshotter.completeSnapshotWork(m_sysprocContext, m_ee);
-                hostLog.info(String.format("Site %d locally finished snapshot. Will update catalog now.",
-                        CoreUtils.getSiteIdFromHSId(m_siteId)));
-            }
-            catch (InterruptedException e) {
-                VoltDB.crashLocalVoltDB("Unexpected Interrupted Exception while finishing a snapshot for a catalog update.", true, e);
-            }
-        }
-
-        //Necessary to quiesce before updating the catalog
-        //so export data for the old generation is pushed to Java.
-        m_ee.quiesce(m_lastCommittedTxnId);
-        m_ee.updateCatalog(m_context.m_uniqueId, diffCmds);
-
         return true;
     }
 
@@ -1021,7 +867,7 @@ public class MpRoSite implements Runnable, SiteProcedureConnection, FragmentPlan
 
     private void updateHashinator(Pair<TheHashinator.HashinatorType, byte[]> config)
     {
-        m_ee.updateHashinator(config.getFirst(), config.getSecond());
+        throw new RuntimeException("RO MP Site doesn't do this, shouldn't be here.");
     }
 
     /// A plan fragment entry in the cache.
@@ -1193,19 +1039,6 @@ public class MpRoSite implements Runnable, SiteProcedureConnection, FragmentPlan
      */
     @Override
     public long[] validatePartitioning(long[] tableIds, int hashinatorType, byte[] hashinatorConfig) {
-        ByteBuffer paramBuffer = ByteBuffer.allocate(4 + (8 * tableIds.length) + 4 + 4 + hashinatorConfig.length);
-        paramBuffer.putInt(tableIds.length);
-        for (long tableId : tableIds) {
-            paramBuffer.putLong(tableId);
-        }
-        paramBuffer.putInt(hashinatorType);
-        paramBuffer.put(hashinatorConfig);
-
-        ByteBuffer resultBuffer = ByteBuffer.wrap(m_ee.executeTask( TaskType.VALIDATE_PARTITIONING, paramBuffer.array()));
-        long mispartitionedRows[] = new long[tableIds.length];
-        for (int ii = 0; ii < tableIds.length; ii++) {
-            mispartitionedRows[ii] = resultBuffer.getLong();
-        }
-        return mispartitionedRows;
+        throw new RuntimeException("RO MP Site doesn't do this, shouldn't be here.");
     }
 }
