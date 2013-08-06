@@ -254,7 +254,7 @@ public class MpRoSite implements Runnable, SiteProcedureConnection, FragmentPlan
     @Override
     public void run()
     {
-        Thread.currentThread().setName("Iv2ExecutionSite: " + CoreUtils.hsIdToString(m_siteId));
+        Thread.currentThread().setName("RO MP Iv2ExecutionSite: " + CoreUtils.hsIdToString(m_siteId));
         initialize();
 
         try {
