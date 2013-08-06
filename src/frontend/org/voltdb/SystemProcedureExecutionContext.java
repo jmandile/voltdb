@@ -31,8 +31,6 @@ public interface SystemProcedureExecutionContext {
 
     public long getCurrentTxnId();
 
-    public long getNextUndo();
-
     public long getSiteId();
 
     // does this site have "lowest site id" responsibilities.

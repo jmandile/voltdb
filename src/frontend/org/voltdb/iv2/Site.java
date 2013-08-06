@@ -219,11 +219,6 @@ public class Site implements Runnable, SiteProcedureConnection, SiteSnapshotConn
         }
 
         @Override
-        public long getNextUndo() {
-            return getNextUndoToken();
-        }
-
-        @Override
         public long getSiteId() {
             return m_siteId;
         }
