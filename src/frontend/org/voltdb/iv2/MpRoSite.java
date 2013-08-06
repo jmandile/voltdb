@@ -23,10 +23,8 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.TreeMap;
 import java.util.concurrent.Future;
-import java.util.concurrent.atomic.AtomicInteger;
 
-import org.voltcore.logging.Level;
-import org.voltcore.logging.VoltLogger;
+//import org.voltcore.logging.VoltLogger;
 import org.voltcore.utils.CoreUtils;
 import org.voltcore.utils.EstTime;
 import org.voltcore.utils.Pair;
@@ -43,7 +41,6 @@ import org.voltdb.ParameterSet;
 import org.voltdb.ProcedureRunner;
 import org.voltdb.SiteProcedureConnection;
 import org.voltdb.SiteSnapshotConnection;
-import org.voltdb.SnapshotSiteProcessor;
 import org.voltdb.StatsAgent;
 import org.voltdb.StatsSelector;
 import org.voltdb.SystemProcedureExecutionContext;
@@ -58,16 +55,13 @@ import org.voltdb.dtxn.SiteTracker;
 import org.voltdb.dtxn.TransactionState;
 import org.voltdb.exceptions.EEException;
 import org.voltdb.jni.ExecutionEngine;
-import org.voltdb.jni.ExecutionEngineIPC;
-import org.voltdb.jni.ExecutionEngineJNI;
 import org.voltdb.jni.Sha1Wrapper;
-import org.voltdb.utils.LogKeys;
 
 import com.google.common.collect.ImmutableMap;
 
 public class MpRoSite implements Runnable, SiteProcedureConnection, FragmentPlanSource
 {
-    private static final VoltLogger hostLog = new VoltLogger("HOST");
+    //private static final VoltLogger hostLog = new VoltLogger("HOST");
 
     // Set to false trigger shutdown.
     volatile boolean m_shouldContinue = true;
@@ -75,17 +69,11 @@ public class MpRoSite implements Runnable, SiteProcedureConnection, FragmentPlan
     // HSId of this site's initiator.
     final long m_siteId;
 
-    final int m_snapshotPriority;
-
     // Partition count is important for some reason.
     int m_numberOfPartitions;
 
     // What type of EE is controlled
     final BackendTarget m_backend;
-
-    // Enumerate execution sites by host.
-    private static final AtomicInteger siteIndexCounter = new AtomicInteger(0);
-    private final int m_siteIndex = siteIndexCounter.getAndIncrement();
 
     // Manages pending tasks.
     final SiteTaskerQueue m_scheduler;
@@ -105,9 +93,6 @@ public class MpRoSite implements Runnable, SiteProcedureConnection, FragmentPlan
     final TableStats m_tableStats;
     final IndexStats m_indexStats;
     final MemoryStats m_memStats;
-
-    // Each execution site manages snapshot using a SnapshotSiteProcessor
-    private SnapshotSiteProcessor m_snapshotter;
 
     // Current catalog
     volatile CatalogContext m_context;
@@ -131,7 +116,6 @@ public class MpRoSite implements Runnable, SiteProcedureConnection, FragmentPlan
         }
     }
     private StartupConfig m_startupConfig = null;
-
 
     // Undo token state for the corresponding EE.
     public final static long kInvalidUndoToken = -1L;
@@ -159,7 +143,6 @@ public class MpRoSite implements Runnable, SiteProcedureConnection, FragmentPlan
     {
         return this;
     }
-
 
     /**
      * SystemProcedures are "friends" with ExecutionSites and granted
@@ -301,7 +284,6 @@ public class MpRoSite implements Runnable, SiteProcedureConnection, FragmentPlan
             long txnId,
             int partitionId,
             int numPartitions,
-            int snapshotPriority,
             InitiatorMailbox initiatorMailbox,
             StatsAgent agent,
             MemoryStats memStats)
@@ -312,7 +294,6 @@ public class MpRoSite implements Runnable, SiteProcedureConnection, FragmentPlan
         m_numberOfPartitions = numPartitions;
         m_scheduler = scheduler;
         m_backend = backend;
-        m_snapshotPriority = snapshotPriority;
         // need this later when running in the final thread.
         m_startupConfig = new StartupConfig(serializedCatalog, context.m_uniqueId);
         m_lastCommittedTxnId = TxnEgo.makeZero(partitionId).getTxnId();
@@ -354,66 +335,13 @@ public class MpRoSite implements Runnable, SiteProcedureConnection, FragmentPlan
         else {
             m_hsql = null;
         }
-
-        m_snapshotter = new SnapshotSiteProcessor(m_scheduler,
-        m_snapshotPriority,
-        new SnapshotSiteProcessor.IdlePredicate() {
-            @Override
-            public boolean idle(long now) {
-                return (now - 5) > m_lastTxnTime;
-            }
-        });
     }
 
     /** Create a native VoltDB execution engine */
     ExecutionEngine initializeEE(String serializedCatalog, final long timestamp)
     {
-        String hostname = CoreUtils.getHostnameOrAddress();
-        ExecutionEngine eeTemp = null;
-        try {
-            if (m_backend == BackendTarget.NATIVE_EE_JNI) {
-                eeTemp =
-                    new ExecutionEngineJNI(
-                        m_context.cluster.getRelativeIndex(),
-                        m_siteId,
-                        m_partitionId,
-                        CoreUtils.getHostIdFromHSId(m_siteId),
-                        hostname,
-                        m_context.cluster.getDeployment().get("deployment").
-                        getSystemsettings().get("systemsettings").getMaxtemptablesize(),
-                        TheHashinator.getConfiguredHashinatorType(),
-                        TheHashinator.getConfigureBytes(m_numberOfPartitions),
-                        this);
-                eeTemp.loadCatalog( timestamp, serializedCatalog);
-            }
-            else {
-                // set up the EE over IPC
-                eeTemp =
-                    new ExecutionEngineIPC(
-                            m_context.cluster.getRelativeIndex(),
-                            m_siteId,
-                            m_partitionId,
-                            CoreUtils.getHostIdFromHSId(m_siteId),
-                            hostname,
-                            m_context.cluster.getDeployment().get("deployment").
-                            getSystemsettings().get("systemsettings").getMaxtemptablesize(),
-                            m_backend,
-                            VoltDB.instance().getConfig().m_ipcPorts.remove(0),
-                            TheHashinator.getConfiguredHashinatorType(),
-                            TheHashinator.getConfigureBytes(m_numberOfPartitions),
-                            this);
-                eeTemp.loadCatalog( timestamp, serializedCatalog);
-            }
-        }
-        // just print error info an bail if we run into an error here
-        catch (final Exception ex) {
-            hostLog.l7dlog( Level.FATAL, LogKeys.host_ExecutionSite_FailedConstruction.name(),
-                            new Object[] { m_siteId, m_siteIndex }, ex);
-            VoltDB.crashLocalVoltDB(ex.getMessage(), true, ex);
-        }
-        return eeTemp;
+        throw new RuntimeException("RO MP Site doesn't do this, shouldn't be here.");
     }
-
 
     @Override
     public void run()
@@ -460,13 +388,6 @@ public class MpRoSite implements Runnable, SiteProcedureConnection, FragmentPlan
     {
         if (m_hsql != null) {
             HsqlBackend.shutdownInstance();
-        }
-        if (m_snapshotter != null) {
-            try {
-                m_snapshotter.shutdown();
-            } catch (InterruptedException e) {
-                hostLog.warn("Interrupted during shutdown", e);
-            }
         }
     }
 
