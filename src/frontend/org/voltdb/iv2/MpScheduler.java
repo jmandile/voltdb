@@ -52,7 +52,8 @@ public class MpScheduler extends Scheduler
         new HashMap<Long, DuplicateCounter>();
 
     private final List<Long> m_iv2Masters;
-    private final long m_buddyHSId;
+    private final List<Long> m_buddyHSIds;
+    private int m_nextBuddy = 0;
     //Generator of pre-IV2ish timestamp based unique IDs
     private final UniqueIdGenerator m_uniqueIdGenerator;
     final private MpTransactionTaskQueue m_pendingTasks;
@@ -64,11 +65,11 @@ public class MpScheduler extends Scheduler
     // Let the one we can't be sure about linger here.  See ENG-4211 for more.
     long m_repairLogAwaitingCommit = Long.MIN_VALUE;
 
-    MpScheduler(int partitionId, long buddyHSId, SiteTaskerQueue taskQueue)
+    MpScheduler(int partitionId, List<Long> buddyHSIds, SiteTaskerQueue taskQueue)
     {
         super(partitionId, taskQueue);
         m_pendingTasks = new MpTransactionTaskQueue(m_tasks);
-        m_buddyHSId = buddyHSId;
+        m_buddyHSIds = buddyHSIds;
         m_iv2Masters = new ArrayList<Long>();
         m_uniqueIdGenerator = new UniqueIdGenerator(partitionId, 0);
     }
@@ -277,7 +278,9 @@ public class MpScheduler extends Scheduler
         // Multi-partition initiation (at the MPI)
         final MpProcedureTask task =
             new MpProcedureTask(m_mailbox, procedureName,
-                    m_pendingTasks, mp, m_iv2Masters, m_buddyHSId, false);
+                    m_pendingTasks, mp, m_iv2Masters,
+                    m_buddyHSIds.get(m_nextBuddy), false);
+        m_nextBuddy = (m_nextBuddy++) % m_buddyHSIds.size();
         m_outstandingTxns.put(task.m_txnState.txnId, task.m_txnState);
         m_pendingTasks.offer(task);
     }
@@ -317,7 +320,9 @@ public class MpScheduler extends Scheduler
         // Multi-partition initiation (at the MPI)
         final MpProcedureTask task =
             new MpProcedureTask(m_mailbox, procedureName,
-                    m_pendingTasks, mp, m_iv2Masters, m_buddyHSId, true);
+                    m_pendingTasks, mp, m_iv2Masters,
+                    m_buddyHSIds.get(m_nextBuddy), true);
+        m_nextBuddy = (m_nextBuddy++) % m_buddyHSIds.size();
         m_outstandingTxns.put(task.m_txnState.txnId, task.m_txnState);
         m_pendingTasks.offer(task);
     }
