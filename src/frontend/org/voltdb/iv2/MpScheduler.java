@@ -73,6 +73,11 @@ public class MpScheduler extends Scheduler
         m_uniqueIdGenerator = new UniqueIdGenerator(partitionId, 0);
     }
 
+    void setMpRoSitePool(MpRoSitePool sitePool)
+    {
+        m_pendingTasks.setMpRoSitePool(sitePool);
+    }
+
     @Override
     public void shutdown()
     {
