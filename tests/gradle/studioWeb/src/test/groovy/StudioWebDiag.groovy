@@ -48,25 +48,25 @@ class StudioWebDiag extends GebReportingSpec {
     @Shared def sqlFile = new File('src/test/resources/sql.txt')
     @Shared def correctReadme = new File('src/test/resources/readme.htm')
     @Shared def chkReadme = new File('../../../src/frontend/org/voltdb/studio/readme.htm')
-  
+
     //SHARED VARIABLES
     @Shared def slurper = new JsonSlurper()
     @Shared def response //stores expected response so that it may be accessed by all helper methods
-    
+
     @Shared def sqlList = []
     @Shared def correctElements = []
     @Shared def correctProcedures = []
     @Shared def correctReadmeLines = []
     @Shared def chkReadmeLines = []
-    
+
     @Shared def fileListPairs = [
         [elementFile, correctElements],
         [procedureFile, correctProcedures],
         [sqlFile, sqlList],
         [correctReadme, correctReadmeLines],
         [chkReadme, chkReadmeLines]]
-    
-    
+
+
     def setupSpec() {
         //Move file contents to memory
         def primeList = {file,list -> if(file.size() != 0) {
@@ -126,10 +126,10 @@ class StudioWebDiag extends GebReportingSpec {
     def 'System Stored Procedures'(){
         setup: 'make stored procedures visible'
         expandFolds()
-       
+
         and: 'obtain their locations and make list of their text'
         def procsToCheck = $('#localhost_8080__Admin_sp').find('ul', 0).children().children('span')*.text()
-        
+
         and: 'expect them to be the same (no extras, none missing)'
         if (correctProcedures.isEmpty()){
             correctProcedures = procsToCheck
